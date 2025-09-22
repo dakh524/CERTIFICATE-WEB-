@@ -1,0 +1,425 @@
+```jsx
+import React, { useState, useEffect, useRef } from 'react';
+
+const App = () => {
+  // Panel state
+  const [panel, setPanel] = useState('admin');
+  
+  // Admin panel states
+  const [template, setTemplate] = useState(null);
+  const [nameX, setNameX] = useState(50);
+  const [nameY, setNameY] = useState(50);
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [hostName, setHostName] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [needsQuiz, setNeedsQuiz] = useState(false);
+  const [quiz, setQuiz] = useState([]);
+  const [passingScore, setPassingScore] = useState(70);
+  const [linkGenerated, setLinkGenerated] = useState(false);
+  const [certificatePreview, setCertificatePreview] = useState('');
+  
+  // Participant panel states
+  const [participantName, setParticipantName] = useState('');
+  const [showCertificate, setShowCertificate] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState([]);
+  const [quizDone, setQuizDone] = useState(false);
+  const [score, setScore] = useState(0);
+  const [certificates, setCertificates] = useState([]);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [eventActive, setEventActive] = useState(false);
+  const templateRef = useRef(null);
+
+  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Check if event is active
+  useEffect(() => {
+    if (startTime && endTime) {
+      const now = new Date();
+      const start = new Date();
+      const end = new Date();
+      
+      const [startH, startM] = startTime.split(':');
+      const [endH, endM] = endTime.split(':');
+      
+      start.setHours(parseInt(startH), parseInt(startM), 0);
+      end.setHours(parseInt(endH), parseInt(endM), 0);
+      
+      setEventActive(now >= start && now <= end);
+    }
+  }, [startTime, endTime, currentTime]);
+
+  // Handle template upload
+  const uploadTemplate = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setTemplate(event.target.result);
+        setLinkGenerated(false);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Set name position by clicking on template
+  const handleTemplateClick = (e) => {
+    if (templateRef.current) {
+      const rect = templateRef.current.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      setNameX(x);
+      setNameY(y);
+    }
+  };
+
+  // Add quiz question
+  const addQuestion = () => {
+    setQuiz([
+      ...quiz,
+      { 
+        question: '', 
+        options: ['', '', '', ''], 
+        correct: 0 
+      }
+    ]);
+  };
+
+  // Update quiz question
+  const updateQuestion = (index, field, value) => {
+    const newQuiz = [...quiz];
+    if (field === 'correct') {
+      newQuiz[index].correct = parseInt(value);
+    } else {
+      newQuiz[index][field] = value;
+    }
+    setQuiz(newQuiz);
+  };
+
+  // Generate participant link
+  const generateLink = () => {
+    if (!eventTitle || !eventDate || !hostName || !startTime || !endTime || !template) {
+      alert('Please fill all event details and upload a template');
+      return;
+    }
+    setLinkGenerated(true);
+    alert('Link generated! Switch to Participant Panel to test.');
+  };
+
+  // Handle quiz answer selection
+  const selectAnswer = (answerIndex) => {
+    const newAnswers = [...answers];
+    newAnswers[currentQuestion] = answerIndex;
+    setAnswers(newAnswers);
+  };
+
+  // Go to next question
+  const nextQuestion = () => {
+    if (currentQuestion < quiz.length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+    } else {
+      // Calculate score
+      let calculatedScore = 0;
+      quiz.forEach((q, index) => {
+        if (answers[index] === q.correct) {
+          calculatedScore += 100 / quiz.length;
+        }
+      });
+      setScore(Math.round(calculatedScore));
+      setQuizDone(true);
+    }
+  };
+
+  // Generate certificate
+  const createCertificate = () => {
+    if (!participantName.trim()) {
+      alert('Please enter your name');
+      return;
+    }
+
+    if (!eventActive) {
+      alert('Certificate generation is not available at this time');
+      return;
+    }
+
+    if (needsQuiz && score < passingScore) {
+      alert(`You need at least ${passingScore}% to pass. Your score: ${score}%`);
+      return;
+    }
+
+    const newCert = {
+      id: Date.now(),
+      name: participantName,
+      event: eventTitle,
+      date: eventDate,
+      time: new Date().toLocaleString(),
+      quizScore: needsQuiz ? score : null
+    };
+    
+    setCertificates([...certificates, newCert]);
+    setShowCertificate(true);
+  };
+
+  // Copy link to clipboard
+  const copyLink = () => {
+    const link = `${window.location.origin}/event/${eventTitle.replace(/\s+/g, '-')}`;
+    navigator.clipboard.writeText(link);
+    alert('Link copied to clipboard!');
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <div className="container mx-auto px-4 py-6">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-4">Certificate Generator</h1>
+          <div className="flex justify-center space-x-4">
+            <button
+              onClick={() => setPanel('admin')}
+              className={`px-6 py-2 rounded-lg font-medium ${
+                panel === 'admin' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'
+              }`}
+            >
+              Admin Panel
+            </button>
+            <button
+              onClick={() => setPanel('participant')}
+              disabled={!linkGenerated}
+              className={`px-6 py-2 rounded-lg font-medium ${
+                panel === 'participant' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'
+              } ${!linkGenerated ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              Participant Panel
+            </button>
+          </div>
+        </div>
+
+        {/* Admin Panel */}
+        {panel === 'admin' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Certificate Editor */}
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold mb-4">Certificate Editor</h2>
+              
+              {/* Upload template */}
+              <div className="mb-4">
+                <label className="block mb-2 font-medium">Upload Certificate Template</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={uploadTemplate}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              {/* Template preview with editing capability */}
+              {template && (
+                <div className="mb-6">
+                  <h3 className="font-medium mb-2">Click on template to set name position</h3>
+                  <div 
+                    ref={templateRef}
+                    onClick={handleTemplateClick}
+                    className="relative bg-gray-100 p-4 rounded border cursor-pointer overflow-hidden"
+                  >
+                    <img 
+                      src={template} 
+                      alt="Certificate Template" 
+                      className="max-w-full h-auto mx-auto"
+                    />
+                    
+                    {/* Name position indicator */}
+                    <div
+                      className="absolute w-32 h-12 bg-blue-500 bg-opacity-30 border-2 border-blue-500 flex items-center justify-center text-blue-800 font-bold text-sm"
+                      style={{
+                        left: `${nameX}%`,
+                        top: `${nameY}%`,
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 10
+                      }}
+                    >
+                      Participant Name<br/>Will Appear Here
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 p-4 bg-blue-50 rounded">
+                    <p className="text-sm text-blue-800 font-medium mb-2">Name Position Settings:</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Horizontal Position (%)</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={nameX}
+                          onChange={(e) => setNameX(parseFloat(e.target.value))}
+                          className="w-full"
+                        />
+                        <span className="text-xs">{Math.round(nameX)}%</span>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Vertical Position (%)</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={nameY}
+                          onChange={(e) => setNameY(parseFloat(e.target.value))}
+                          className="w-full"
+                        />
+                        <span className="text-xs">{Math.round(nameY)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Preview of how certificate will look */}
+              {template && (
+                <div className="mt-6">
+                  <h3 className="font-medium mb-3">Certificate Preview</h3>
+                  <div className="bg-white p-6 rounded-lg border relative">
+                    <img 
+                      src={template} 
+                      alt="Certificate Preview" 
+                      className="w-full h-auto opacity-80"
+                    />
+                    <div
+                      className="absolute font-bold text-2xl text-blue-800"
+                      style={{
+                        left: `${nameX}%`,
+                        top: `${nameY}%`,
+                        transform: 'translate(-50%, -50%)',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      John Doe
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Event Settings */}
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold mb-4">Event Settings</h2>
+              
+              {/* Event details */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block mb-1 font-medium">Event Title *</label>
+                  <input
+                    type="text"
+                    value={eventTitle}
+                    onChange={(e) => setEventTitle(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    placeholder="Enter event title"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block mb-1 font-medium">Event Date *</label>
+                  <input
+                    type="date"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block mb-1 font-medium">Host/Conductor Name *</label>
+                  <input
+                    type="text"
+                    value={hostName}
+                    onChange={(e) => setHostName(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    placeholder="Enter host name"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block mb-1 font-medium">Start Time *</label>
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block mb-1 font-medium">End Time *</label>
+                    <input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                </div>
+                
+                {/* Quiz toggle */}
+                <div className="pt-4 border-t">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={needsQuiz}
+                      onChange={(e) => setNeedsQuiz(e.target.checked)}
+                      className="mr-2"
+                    />
+                    <span>Require quiz to get certificate</span>
+                  </label>
+                </div>
+                
+                {/* Quiz settings */}
+                {needsQuiz && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-medium">Quiz Questions</h3>
+                      <button
+                        onClick={addQuestion}
+                        className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                      >
+                        Add Question
+                      </button>
+                    </div>
+                    
+                    {quiz.map((q, index) => (
+                      <div key={index} className="mb-4 p-3 bg-white rounded border">
+                        <input
+                          type="text"
+                          value={q.question}
+                          onChange={(e) => updateQuestion(index, 'question', e.target.value)}
+                          placeholder={`Question ${index + 1}`}
+                          className="w-full p-2 mb-3 border rounded"
+                        />
+                        
+                        {q.options.map((option, optIndex) => (
+                          <div key={optIndex} className="flex items-center mb-2">
+                            <input
+export default function App() {
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      {/* Main content */}
+      <div className="container mx-auto px-4 py-6 flex-grow">
+        {/* Your sections like logo, quotes, events, services, etc. */}
+      </div>
+
+      {/* 👇 Add this footer here */}
+      <footer className="bg-gray-200 py-4 mt-6">
+        <p className="text-center text-sm text-gray-700">
+          Made by <span className="font-semibold">DAKH EDU SOLUTION</span>
+        </p>
+      </footer>
+    </div>
+  );
+}
